@@ -44,7 +44,7 @@ function mpCheckConnection()
 function getAll(ext)
 {
     for (var ind=0; ind<ext.length; ind++) {
-        if (ext[ind].shortName == 'Mooltipass Client') {
+        if (ext[ind].shortName == 'Mooltipass Client HQ') {
             mpClient = ext[ind];
             break;
         }
