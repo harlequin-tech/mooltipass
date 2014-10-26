@@ -152,7 +152,7 @@ flash: $(TARGET).hex
 	avrdude $(AVRDUDEFLAGS) -p $(MCU) -U flash:w:$<:i
 
 # Upload the hex image via the dfu bootloader
-upload: $(TARGET).hex
+load: $(TARGET).hex
 	@echo "The following will request root access"
 	sudo dfu-programmer atmega32u4 erase
 	sudo dfu-programmer atmega32u4 flash $<
@@ -162,7 +162,7 @@ upload: $(TARGET).hex
 		sudo dfu-programmer atmega32u4 start
 
 # Upload the hex image via the dfu bootloader
-load: $(TARGET).hex
+upload: $(TARGET).hex
 	dfu-programmer atmega32u4 erase
 	dfu-programmer atmega32u4 flash $<
 	dfu-programmer atmega32u4 start
