@@ -49,8 +49,8 @@ var payloadSize = packetSize - 2;
 
 var AUTH_REQ_TIMEOUT = 15000;   // timeout for requests sent to mooltipass
 
-//var reContext = /^\https?\:\/\/(?:www)?([\w\d.\-\_]+)/;   // URL regex to extract base domain for context
-var reContext = /^\https?\:\/\/([\w\-\+]+\.)*([\w\-\_]+\.[\w\-\_]+)/;   // URL regex to extract base domain for context
+var reContext = /^\https?\:\/\/(?:www)?([\w\d.\-\_]+)/;   // URL regex to extract base domain for context
+//var reContext = /^\https?\:\/\/([\w\-\+]+\.)*([\w\-\_]+\.[\w\-\_]+)/;   // URL regex to extract base domain for context
 
 // Commands that the MP device can send.
 var CMD_DEBUG               = 0x01;
@@ -330,6 +330,13 @@ function getNextField()
             //console.log('getNextField(): got all fields '+JSON.stringify(authReq.inputs));
             chrome.runtime.sendMessage(authReq.senderId, {type: 'credentials', inputs: authReq.inputs});
             log('#messageLog','sent credentials\n');
+            for (var key in authReq.inputs) {
+                if (key == 'password') {
+                    log('#messageLog', '    password: "'+authReq.inputs[key].value.replace(/./gi, '*')+'"\n');
+                } else {
+                    log('#messageLog', '    username: "'+authReq.inputs[key].value+'"\n');
+                }
+            }
             authReq = null;
         }
     }
@@ -476,6 +483,20 @@ function endAuthRequest()
     }
 }
 
+function getContext(url)
+{
+    var newContext = null;
+    match = reContext.exec(url);
+    if (match.length > 0) {
+        if (match.length > 1) {
+            newContext = match[1];
+        } else {
+            newContext = match[0];
+        }
+    } 
+    return newContext;
+}
+
 /**
  * start a new auth request
  */
@@ -501,30 +522,41 @@ function startAuthRequest(request)
 
         console.log('keys: '+JSON.stringify(authReq.keys))
 
-        match = reContext.exec(request.url);
-        if (match.length > 1) {
-            if (!context || context != match[2]) {
-                context = match[2];
+        var newContext = getContext(request.url);
+        if (newContext) {
+            if (!context || context != newContext) {
+                context = newContext;
                 console.log('context: '+context);
             } else {
-                console.log('not updating context '+context+' to '+match[1]);
+                console.log('not updating context '+context+' to '+newContext);
             }
+        } else {
+            // no context extracted from URL
+            console.log('could not extract context from',request.url);
+            authReq = null;
+            chrome.runtime.sendMessage(clientId, {type: 'noCredentials'});
+            break;
         }
         authReq.context = context;
+        log('#messageLog', 'get credentials: '+context+'\n');
 
         authReqTimeout = setTimeout(timeoutAuthRequest, AUTH_REQ_TIMEOUT);
         setContext(false);
         break;
 
     case 'update':
+        var updateContext =  getContext(request.url);
+        if (!updateContext) {
+            // no context extracted from URL
+            console.log('update: could not extract context from',request.url);
+            authReq = null;
+            break;
+        }
+
         clientId = request.senderId;
         authReq = request;
-        match = reContext.exec(request.url);
-        if (match.length > 1) {
-            authReq.context = match[2];
-            console.log('auth context: '+authReq.context);
-        }
-        log('#messageLog', 'update:\n');
+        authReq.context = updateContext;
+        log('#messageLog', 'update: '+updateContext+'\n');
         for (var key in request.inputs)
         {
             id = (request.inputs[key].id) ? request.inputs[key].id : request.inputs[key].name;
@@ -544,7 +576,6 @@ function startAuthRequest(request)
             setNextField();
         }
         break;
-
 
     default:
         // not a supported request type
