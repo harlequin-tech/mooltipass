@@ -84,37 +84,27 @@ void bsInit(
  */
 static inline uint16_t bsGetNextWord(bitstream_t *bs)
 {
-    if (bs->_count < bs->_size) 
-    {
+    if (bs->_count < bs->_size) {
         bs->_count++;
 #ifdef OLED_FEATURE_PGM_MEMORY
-        if (bs->flash) 
-        {
+        if (bs->flash) {
             return (uint16_t)pgm_read_word(bs->_datap++);
         } else
 #endif
-        if (bs->addr)
-        {
-            if (bs->bufInd < (sizeof(bs->buf)/2)) 
-            {
+        if (bs->addr) {
+            if (bs->bufInd < (sizeof(bs->buf)/2)) {
                 return ((uint16_t *)bs->buf)[bs->bufInd++];
-            }
-            else 
-            {
+            } else {
                 flashRawRead(bs->buf, bs->addr, sizeof(bs->buf));
                 bs->addr += sizeof(bs->buf);
                 bs->bufInd = 0;
                 return ((uint16_t *)bs->buf)[bs->bufInd++];
             }
             //usbPrintf_P(PSTR("bs: 0x%04x = 0x%04x\n"), bs->addr, data);
-        }
-        else
-        {
+        } else {
             return *bs->_datap++;
         }
-    } 
-    else 
-    {
+    } else {
         return 0;
     }
 }
@@ -126,37 +116,28 @@ static inline uint16_t bsGetNextWord(bitstream_t *bs)
  */
 static inline uint8_t bsGetNextByte(bitstream_t *bs)
 {
-    if (bs->_count < bs->_size) 
-    {
+    if (bs->_count < bs->_size) {
         bs->_count++;
 #ifdef OLED_FEATURE_PGM_MEMORY
-        if (bs->flash) 
-        {
+        if (bs->flash) {
             return pgm_read_byte(bs->_cdatap++);
         } else
 #endif
-        if (bs->addr)   // data is in flash
-        {
-            if (bs->bufInd < sizeof(bs->buf)) 
-            {
+        if (bs->addr)  {
+            // data is in flash
+            if (bs->bufInd < sizeof(bs->buf)) {
                 return bs->buf[bs->bufInd++];
-            }
-            else 
-            {
+            } else {
                 flashRawRead(bs->buf, bs->addr, sizeof(bs->buf));
                 bs->addr += sizeof(bs->buf);
                 bs->bufInd = 0;
                 return bs->buf[bs->bufInd++];
             }
             //usbPrintf_P(PSTR("bs: 0x%04x = 0x%02x\n"), bs->addr, data);
-        }
-        else 
-        {
+        } else {
             return *bs->_cdatap++;
         }
-    }
-    else
-    {
+    } else {
         return 0;
     }
 }
@@ -172,45 +153,34 @@ static inline uint8_t bsGetNextByte(bitstream_t *bs)
 uint16_t bsRead(bitstream_t *bs, uint8_t numPixels)
 {
     uint16_t data=0;
-    if (bs->_flags & BS_RLE) 
-    {
-        while (numPixels--) 
-        {
+    if (bs->_flags & BS_RLE) {
+        while (numPixels--) {
             data <<= 4;
-            if (bs->_bits == 0) 
-            {
+            if (bs->_bits == 0) {
                 uint8_t byte = bsGetNextByte(bs);
                 bs->_bits = (byte >> 4) + 1;
                 bs->_pixel = byte & 0x0F;
             }
-            if (bs->_bits) 
-            {
+            if (bs->_bits) {
                 data |= bs->_pixel;
                 bs->_bits--;
             }
         }
-    }
-    else
-    {
-        while (numPixels--) 
-        {
+    } else {
+        while (numPixels--) {
             data <<= 4;
-            if (bs->_bits == 0) 
-            {
+            if (bs->_bits == 0) {
                 bs->_word = bsGetNextWord(bs);
                 bs->_bits = bs->_wordsize;
             }
-            if (bs->_bits >= bs->bitsPerPixel) 
-            {
+            if (bs->_bits >= bs->bitsPerPixel) {
                 bs->_bits -= bs->bitsPerPixel;
                 data |= (((bs->_word >> bs->_bits) & bs->mask) * 15) / bs->mask;
 #ifdef DEBUG_BS
                 usbPrintf_P(PSTR("pixel: 0x%x (bits=%d, word=0x%04x)\n"), (((bs->_word >> bs->_bits) & bs->mask) * 15) / bs->mask,
                         bs->_bits, bs->_word);
 #endif
-            }
-            else 
-            {
+            } else {
                 uint8_t offset = bs->bitsPerPixel - bs->_bits;
                 data |= (bs->_word << offset & bs->mask);
                 bs->_bits += bs->_wordsize - bs->bitsPerPixel;
@@ -237,17 +207,14 @@ uint16_t bsCompressedRead(bitstream_t *bs, uint8_t numPixels)
 {
     uint16_t data=0;
 
-    while (numPixels--) 
-    {
+    while (numPixels--) {
         data <<= 4;
-        if (bs->_bits == 0) 
-        {
+        if (bs->_bits == 0) {
             uint8_t byte = bsGetNextByte(bs);
             bs->_bits = (byte >> 4) + 1;
             bs->_pixel = byte & 0x0F;
         }
-        if (bs->_bits) 
-        {
+        if (bs->_bits) {
             data |= bs->_pixel;
             bs->_bits--;
         }
