@@ -29,20 +29,23 @@ import xml.etree.ElementTree as ET
 import numpy as np
 from optparse import OptionParser
 from struct import *
+import fontforge
 
-parser = OptionParser(usage = 'usage: %prog [options]')
+parser = OptionParser(usage = 'usage: %prog [opts]')
 parser.add_option('-n', '--name', help='name for font', dest='name', default=None)
+parser.add_option('-t', '--ttf', help='ttf font file name', dest='ttf', default=None)
 parser.add_option('-p', '--png', help='png file for font', dest='png', default=None)
 parser.add_option('-x', '--xml', help='xml file for font', dest='xml', default=None)
 parser.add_option('-o', '--output', help='name of output file', dest='output', default='font')
 parser.add_option('-d', '--depth', help='bits per pixel (default: 2)', type='int', dest='depth', default=2)
+parser.add_option('-l', '--list', help='list glyphs', action='store_true', dest='list', default=False)
 parser.add_option('', '--debug', help='enable debug output', action='store_true', dest='debug', default=False)
-(options, args) = parser.parse_args()
+(opts, args) = parser.parse_args()
 
 CHAR_EURO = 0x20ac      # Euro currency sign, not yet supported
 
-if options.name == None or options.png == None or options.xml == None:
-    parser.error('name, png, and xml options are required')
+#if opts.ttf is None or (opts.name == None or opts.png == None or opts.xml == None):
+#    parser.error('name, png, and xml opts are required')
 
 extendedChars = {
     0xB0: 'Degree Sign',
@@ -61,6 +64,90 @@ extendedChars = {
     0x20AC: ' E - Euro Sign'
 }
 
+def generateGlyphHeader(fontName, ch, pngFilename):
+    print('testing {}'.format(ch))
+    glyph = png.Reader(pngFilename)
+    width, height, pixels, meta = glyph.asDirect()
+    print('width: {}, height: {}'.format(width,height))
+    print(dir(pixels))
+    print(meta)
+
+    outfd = open('{}.h'.format(opts.output), 'w')
+    print( '/*')
+    print( ' * Font {}'.format(fontName))
+    print( ' */')
+    print( '')
+    print( '#define {}_HEIGHT {}'.format(fontName.upper(),height))
+    print( '')
+
+    yind = 0
+    line = {}
+    #for item in pixels:
+    for yind in range(0,height):
+        try:
+            item = pixels.next()
+        except:
+            break
+        print('{}: {}'.format(yind,item))
+        line[yind] = []
+        for xind in xrange(0,len(item),3):
+            line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2]))
+            #line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2], a=item[xind+3]))
+        print('{}: {}'.format(yind,line[yind]))
+        yind += 1
+        if yind >= height:
+            break
+
+    asciiPixel = [' ', '.', '*', '*',
+                  '*', '*', '*', '*',
+                  '*', '*', '*', '*',
+                  '*', '*', '*', '*']
+
+    count = 0
+    glyphData = {}
+    glyphData[ch] = []
+    offset = 0
+    print( "const uint8_t {}_{:#x}[] __attribute__((__progmem__)) = {{   /* '{}' width: {} */".format(fontName,ord(ch), ch, width))
+
+    x = 0
+    for y in range(0,height):
+        patt = ''
+        print( '    ')
+        lineWidth = 1
+        pixels = 0
+        pixCount = 0
+        for x in range(0,width):
+            count += 1
+            # map 255 shades to 4
+            pix = line[y][x]['r'] >> (8-opts.depth)
+            pixels = pixels << opts.depth | pix
+            pixCount += 1
+            if pixCount >= (8/opts.depth):
+                lineWidth += 1
+                print( '0x{:02x}, '.format(pixels))
+                glyphData[ch].append(pixels & 0xFF)
+                pixels = 0
+                pixCount = 0
+
+            patt += asciiPixel[pix]
+
+        count += 1
+        pix = line[y][x+1]['r'] >> (8-opts.depth)
+        patt += asciiPixel[pix]
+        pixels = pixels << (opts.depth) | pix
+        pixCount += 1
+        if pixCount < (8/opts.depth):
+            pixels = pixels << ((8/opts.depth)-pixCount)
+        print( '0x{:02x}, '.format(pixels))
+        glyphData[ch].append(pixels & 0xFF)
+        #glyphData[ch].append((pixels >> 8) & 0xFF)
+        if lineWidth < (maxWidth+3)/4:
+            for ind in range(lineWidth, (maxWidth+3)/4):
+                print( '      ')
+        print( ' /* [{}] */'.format(patt))
+    print( '};\n')
+    print( '')
+
 def generateHeader(fontName, pngFilename, xmlFilename):
     ''' Output C code tables for the specified font
     '''
@@ -78,13 +165,13 @@ def generateHeader(fontName, pngFilename, xmlFilename):
 
     width, height, pixels, meta = font.asDirect()
 
-    outfd = open('{}.h'.format(options.output), 'w')
-    print >> outfd, '/*'
-    print >> outfd, ' * Font {}'.format(fontName)
-    print >> outfd, ' */'
-    print >> outfd, ''
-    print >> outfd, '#define {}_HEIGHT {}'.format(fontName.upper(),root.attrib['height'])
-    print >> outfd, ''
+    outfd = open('{}.h'.format(opts.output), 'w')
+    print( '/*')
+    print( ' * Font {}'.format(fontName))
+    print( ' */')
+    print( '')
+    print( '#define {}_HEIGHT {}'.format(fontName.upper(),root.attrib['height']))
+    print( '')
 
     yind = 0
     line = {}
@@ -109,27 +196,27 @@ def generateHeader(fontName, pngFilename, xmlFilename):
         glyphData[ch] = []
         rect = [int(x) for x in glyph['rect'].split()]
         offset = [int(x) for x in glyph['offset'].split()]
-        print >> outfd, 'const uint8_t {}_{:#x}[] __attribute__((__progmem__)) = {{'.format(fontName,ord(glyph['code'])),
+        print( 'const uint8_t {}_{:#x}[] __attribute__((__progmem__)) = {{'.format(fontName,ord(glyph['code'])))
         try:
-            print >> outfd, "  /* '{0}' width: {1} */".format(glyph['code'],glyph['width'])
+            print( "  /* '{0}' width: {1} */".format(glyph['code'],glyph['width']))
         except:
-            print >> outfd, "  /* '?' width: {} */".format(glyph['width'])
+            print( "  /* '?' width: {} */".format(glyph['width']))
         x = 0
         for y in range(rect[1],rect[1]+rect[3]):
             patt = ''
-            print >> outfd, '    ',
+            print( '    ')
             lineWidth = 1
             pixels = 0
             pixCount = 0
             for x in range(rect[0],rect[0]+rect[2]-1):
                 count += 1
                 # map 255 shades to 4
-                pix = line[y][x]['a'] >> (8-options.depth)
-                pixels = pixels << options.depth | pix
+                pix = line[y][x]['a'] >> (8-opts.depth)
+                pixels = pixels << opts.depth | pix
                 pixCount += 1
-                if pixCount >= (8/options.depth):
+                if pixCount >= (8/opts.depth):
                     lineWidth += 1
-                    print >> outfd, '0x{:02x}, '.format(pixels),
+                    print( '0x{:02x}, '.format(pixels))
                     glyphData[ch].append(pixels & 0xFF)
                     #glyphData[ch].append((pixels >> 8) & 0xFF)
                     pixels = 0
@@ -138,21 +225,21 @@ def generateHeader(fontName, pngFilename, xmlFilename):
                 patt += asciiPixel[pix]
 
             count += 1
-            pix = line[y][x+1]['a'] >> (8-options.depth)
+            pix = line[y][x+1]['a'] >> (8-opts.depth)
             patt += asciiPixel[pix]
-            pixels = pixels << (options.depth) | pix
+            pixels = pixels << (opts.depth) | pix
             pixCount += 1
-            if pixCount < (8/options.depth):
-                pixels = pixels << ((8/options.depth)-pixCount)
-            print >> outfd, '0x{:02x}, '.format(pixels),
+            if pixCount < (8/opts.depth):
+                pixels = pixels << ((8/opts.depth)-pixCount)
+            print( '0x{:02x}, '.format(pixels))
             glyphData[ch].append(pixels & 0xFF)
             #glyphData[ch].append((pixels >> 8) & 0xFF)
             if lineWidth < (maxWidth+3)/4:
                 for ind in range(lineWidth, (maxWidth+3)/4):
-                    print >> outfd, '      ',
-            print >> outfd, ' /* [{}] */'.format(patt)
-        print >> outfd, '};\n'
-    print >> outfd, ''
+                    print( '      ')
+            print( ' /* [{}] */'.format(patt))
+        print( '};\n')
+    print( '')
 
     # font header:
     #
@@ -166,7 +253,7 @@ def generateHeader(fontName, pngFilename, xmlFilename):
     #        const uint8_t *bitmaps;  //*< fixed width font data
     #    } fontData;
 
-    bfd = open('{}.img'.format(options.output), "wb")
+    bfd = open('{}.img'.format(opts.output), "wb")
 
     #
     # binary header
@@ -180,15 +267,15 @@ def generateHeader(fontName, pngFilename, xmlFilename):
     # Can't handle 2 byte characters yet, so skip them
     for char in glyphData.keys():
         if char > 254:
-            print 'skipping extended character 0x{:x}'.format(char)
+            print('skipping extended character 0x{:x}'.format(char))
             glyphCount -= 1
 
-    print '{} glyphs'.format(glyphCount)
-    header = pack('=BBBB', int(root.attrib['height']), fixedWidth, options.depth, glyphCount)
+    print( '{} glyphs'.format(glyphCount))
+    header = pack('=BBBB', int(root.attrib['height']), fixedWidth, opts.depth, glyphCount)
     bfd.write(header)
 
-    if options.debug:
-        print 'XXX header: {}'.format(['0x{:02x}'.format(item) for item in bytearray(header)])
+    if opts.debug:
+        print( 'XXX header: {}'.format(['0x{:02x}'.format(item) for item in bytearray(header)]))
 
     # map
     index = 0
@@ -224,21 +311,21 @@ def generateHeader(fontName, pngFilename, xmlFilename):
 
     glyphMap = []
 
-    print >> outfd, '/* Mapping from ASCII codes to font characters, from space (0x20) to del (0x7f) */'
-    print >> outfd, 'const uint8_t {}_asciimap[{}] __attribute__((__progmem__)) = {{ '.format(fontName,len(chMap)),
+    print( '/* Mapping from ASCII codes to font characters, from space (0x20) to del (0x7f) */')
+    print( 'const uint8_t {}_asciimap[{}] __attribute__((__progmem__)) = {{ '.format(fontName,len(chMap)))
     index = 0
     for item in chMap:
         if index == 0:
-            print >> outfd, '\n    ',
+            print( '\n    ')
             index = 16
         if item != None:
             glyphMap.append(item)
-            print >> outfd, '{:>3}, '.format(item),
+            print( '{:>3}, '.format(item))
         else:
             glyphMap.append(255)
-            print >> outfd, '255, ',
+            print( '255, ')
         index -= 1
-    print >> outfd, '};\n'
+    print( '};\n')
 
     if len(chMap) < 256:
         glyphMap.extend([255 for i in range(0, 256-len(chMap))])
@@ -249,8 +336,8 @@ def generateHeader(fontName, pngFilename, xmlFilename):
     #
     binaryData = bytearray(glyphMap)
     bfd.write(binaryData)
-    if options.debug:
-        print "XXX glyphMap: {}".format(['0x{:02x}'.format(item) for item in bytearray(glyphMap)])
+    if opts.debug:
+        print( "XXX glyphMap: {}".format(['0x{:02x}'.format(item) for item in bytearray(glyphMap)]))
 
     #
     # binary glyph header data
@@ -259,20 +346,20 @@ def generateHeader(fontName, pngFilename, xmlFilename):
     for ch in range(ord(' '), 255):
         if glyphd.has_key(ch):
             bfd.write(glyphHeader[ch])
-            if options.debug:
+            if opts.debug:
                 if ch < 127:
-                    print "XXX '{}' hdr[{}]: {}".format(chr(ch), index, ['0x{:02x}'.format(item) for item in bytearray(glyphHeader[ch])])
+                    print( "XXX '{}' hdr[{}]: {}".format(chr(ch), index, ['0x{:02x}'.format(item) for item in bytearray(glyphHeader[ch])]))
                 else:
-                    print "XXX {} hdr[{}]: {}".format(ch, index, ['0x{:02x}'.format(item) for item in bytearray(glyphHeader[ch])])
+                    print( "XXX {} hdr[{}]: {}".format(ch, index, ['0x{:02x}'.format(item) for item in bytearray(glyphHeader[ch])]))
             index += 1
 
     # glyph_t
 
-    print >> outfd, 'const glyph_t {}[] __attribute__((__progmem__)) = {{'.format(fontName)
+    print( 'const glyph_t {}[] __attribute__((__progmem__)) = {{'.format(fontName))
 
-    print >> outfd, glyphHeaderStr,
+    print( glyphHeaderStr)
 
-    print >> outfd, '};\n'
+    print( '};\n')
 
     #
     # binary glyph data
@@ -285,21 +372,57 @@ def generateHeader(fontName, pngFilename, xmlFilename):
         # convert glyph data to uint16_t packed data
         binaryData = bytearray(glyphData[ch])
         bfd.write(binaryData)
-        if options.debug:
+        if opts.debug:
             if ch < 127:
-                print "XXX 0x{:04x} '{}' data: {}".format(offset,chr(ch),['0x{:02x}'.format(item) for item in bytearray(glyphData[ch])])
+                print( "XXX 0x{:04x} '{}' data: {}".format(offset,chr(ch),['0x{:02x}'.format(item) for item in bytearray(glyphData[ch])]))
             else:
-                print "XXX 0x{:04x} {} data: {}".format(offset,ch,['0x{:02x}'.format(item) for item in bytearray(glyphData[ch])])
+                print( "XXX 0x{:04x} {} data: {}".format(offset,ch,['0x{:02x}'.format(item) for item in bytearray(glyphData[ch])]))
         offset += len(glyphData[ch])
 
     bfd.close()
     outfd.close()
-    print >> sys.stderr, 'wrote header font to {}.h'.format(options.output)
-    print >> sys.stderr, 'wrote binary font to {}.img'.format(options.output)
+    print( 'wrote header font to {}.h'.format(opts.output))
+    print( 'wrote binary font to {}.img'.format(opts.output))
     return count
 
 def main():
-    generateHeader(options.name, options.png, options.xml)
+    chars = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ%$'
+    cmap = {'0': 'zero', 
+            '1': 'one', 
+            '2': 'two', 
+            '3': 'three', 
+            '4': 'four', 
+            '5': 'five', 
+            '6': 'six', 
+            '7': 'seven', 
+            '8': 'eight', 
+            '9': 'nine',
+            '%': 'percent',
+            '!': 'exclam',
+            '$': 'dolar',
+            }
+    if opts.ttf:
+        glyphs = fontforge.open(opts.ttf)
+        if opts.list:
+            for name in glyphs:
+                filename = 'output/' + name + ".png"
+                print( '0x{:x}: {:17} -> {}'.format(glyphs[name].originalgid, name, filename))
+            return
+        for name in chars:
+            if name in cmap:
+                ind = cmap[name]
+            else:
+                ind = name
+            if ind in glyphs:
+                filename = 'output/' + name + ".png"
+                print( '0x{:x}: {:17} -> {}'.format(glyphs[ind].originalgid, name, filename))
+                glyphs[ind].export(filename, 20, 6)
+                #glyphs[ind].export(filename, 20, 6)
+                generateGlyphHeader('test', name, filename)
+                return
+        return
+
+    generateHeader(opts.name, opts.png, opts.xml)
 
 if __name__ == "__main__":
     main()
