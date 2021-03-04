@@ -288,8 +288,8 @@ def genpng(chars):
 
     font = TTFont(opts.ttf) 
     gs = font.getGlyphSet()
-    a = gs['W']
-    baseWidth = a.width
+    ref = gs['zero']
+    baseWidth = ref.width
     for ch in chars:
         if ch in cmap:
             glyphName = cmap[ch]
@@ -302,19 +302,19 @@ def genpng(chars):
             print('{}: width: {}, height: {}'.format( ch, g.width, g.height))
 
         #w, h = g.width, 21
-        w = int((g.width / float(a.width)) * 30.9)
+        w = int((g.width / float(ref.width)) * 30.9)
         h = 28 
         if opts.verbose:
             print('{}: width: {}, height: {}, w: {}, h: {}'.format( ch, g.width, g.height, w, h))
-        gscale = float(21.0 / float(g.width))
+        gscale = float(31.0 / float(g.width)) * 0.45
         from reportlab.graphics import renderPM
         from reportlab.graphics.shapes import Group, Drawing, scale
 
         # Everything is wrapped in a group to allow transformations.
         g = Group(pen.path)
         #g.translate(0, 180)
-        g.scale(0.008, 0.008)
-        #g.scale(gscale, gscale)
+        #g.scale(0.008, 0.008)
+        g.scale(gscale, gscale)
 
         d = Drawing(w, h)
         d.add(g)
@@ -323,7 +323,8 @@ def genpng(chars):
         renderPM.drawToFile(d, imageFile, fmt="PNG")
 
 def main():
-    chars = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ%$'
+    #chars = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ%$'
+    chars = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
     if opts.ttf:
         genpng(chars)
         if opts.name is None:
