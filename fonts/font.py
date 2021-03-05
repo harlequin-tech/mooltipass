@@ -201,50 +201,55 @@ def writeAsciiMap(outfd, fontName, chMap):
     print('\n};', file=outfd)
     return glyphMap
 
+def parsePNG(pngFilename, ch, glyphName, glyphd):
+    glyph = png.Reader(pngFilename)
+    width, height, pixels, meta = glyph.asDirect()
+    glyphd[glyphName] = dict(width=width, height=height, meta=meta)
+    maxWidth = width
+    if opts.verbose > 2:
+        print(meta)
+    if opts.verbose > 1:
+        print('{}: width: {}, height: {}'.format(ch, width,height))
+
+    yoff = 0
+    yind = 0
+    pind = 'r'
+    line = {}
+    pixs = list(pixels)
+    minWidth = getMinWidth(ch, list(pixs))
+    if opts.verbose > 1:
+        print('{}: width {} minWidth {}'.format(ch, width, minWidth))
+
+    # parse PNG and extract raster
+    for item in pixs:
+        if opts.verbose > 2:
+            print('{}: {}'.format(yind,item))
+        if isBlankLine(item):
+            yoff += 1
+            continue
+        line[yind] = []
+        for xind in range(0,minWidth,3):
+            line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2]))
+        if opts.verbose > 2:
+            print('{}: {}'.format(yind,line[yind]))
+        yind += 1
+
+    return line,width,height,yoff,maxWidth
+
 
 def writeGlyphs(outfd, fontName, chars):
     glyphd = {}
     glyphData = {}
     header = True
+    pind = 'r'
     for ch in chars:
         glyphName = getGlyphName(ch)
         pngFilename = 'output/{}.png'.format(glyphName)
-        glyph = png.Reader(pngFilename)
-        width, height, pixels, meta = glyph.asDirect()
-        glyphd[glyphName] = dict(width=width, height=height, meta=meta)
-        maxWidth = width
-        if opts.verbose > 2:
-            print(meta)
-        if opts.verbose > 1:
-            print('{}: width: {}, height: {}'.format(ch, width,height))
+        line,width,height,yoff,maxWidth = parsePNG(pngFilename, ch, glyphName, glyphd)
 
         if header:
             writeHeader(outfd, fontName, height)
             header = False
-
-        yoff = 0
-        yind = 0
-        pind = 'r'
-        line = {}
-        pixs = list(pixels)
-        minWidth = getMinWidth(ch, list(pixs))
-        if opts.verbose > 1:
-            print('{}: width {} minWidth {}'.format(ch, width, minWidth))
-
-        #width, height, pixels, meta = glyph.asDirect()
-        for item in pixs:
-            if opts.verbose > 2:
-                print('{}: {}'.format(yind,item))
-            if isBlankLine(item):
-                yoff += 1
-                continue
-            line[yind] = []
-            for xind in range(0,minWidth,3):
-                line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2]))
-                #line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2], a=255-item[xind+3]))
-            if opts.verbose > 2:
-                print('{}: {}'.format(yind,line[yind]))
-            yind += 1
 
         asciiPixel = [' ', '.', '*', '*',
                       '*', '*', '*', '*',
@@ -257,6 +262,7 @@ def writeGlyphs(outfd, fontName, chars):
         offset = 0
         print( "const uint8_t {}_{:#x}[] __attribute__((__progmem__)) = {{   /* '{}' width: {} */".format(fontName,ord(ch), ch, width), file=outfd)
 
+        # write glyph and ASCII art
         x = 0
         for y in range(0,height-yoff):
             patt = ''
@@ -281,8 +287,8 @@ def writeGlyphs(outfd, fontName, chars):
 
             glyphData[glyphName].append(pixels & 0xFF)
             if lineWidth < (maxWidth+3)/4:
-                for ind in range(lineWidth, int((maxWidth+3)/4)):
-                    print( '      ', end='', file=outfd)
+                #for ind in range(lineWidth, int((maxWidth+3)/4)):
+                print('        ', end='', file=outfd)
             print(' /* [{}] */'.format(patt), file=outfd)
         print('};\n', file=outfd)
         print('', file=outfd)
