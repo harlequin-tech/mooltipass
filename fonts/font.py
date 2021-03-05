@@ -36,8 +36,7 @@ parser.add_option('-o', '--output', help='name of output file', dest='output', d
 parser.add_option('-d', '--depth', help='bits per pixel (default: 2)', type='int', dest='depth', default=2)
 parser.add_option('-s', '--scale', help='scale font by this (default: 1.0)', type='float', dest='scale', default=1.0)
 parser.add_option('-l', '--list', help='list glyphs', action='store_true', dest='list', default=False)
-parser.add_option('', '--debug', help='enable debug output', action='store_true', dest='debug', default=False)
-parser.add_option('', '--verbose', help='enable verbose output', action='store_true', dest='verbose', default=False)
+parser.add_option('-v', '--verbose', help='enable verbose output', action='count', dest='verbose', default=0)
 (opts, args) = parser.parse_args()
 
 if opts.ttf is None:
@@ -126,8 +125,6 @@ def writeHeader(outfd, fontName, height):
     print( '', file=outfd)
     print( '#define {}_HEIGHT {}'.format(fontName.upper(),height), file=outfd)
     print( '', file=outfd)
-
-debug = True
 
 def getMinWidth(ch, pixels,verbose=0):
     minWidth = 0
