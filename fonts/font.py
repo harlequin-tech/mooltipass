@@ -1,27 +1,20 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2014 Darran Hunt (darran [at] hunt dot net dot nz)
+# Copyright (c) 2014,2021 Darran Hunt (darran [at] hunt dot net dot nz)
 # All rights reserved.
 #
-# CDDL HEADER START
+# This program is free software: you can redistribute it and/or modify  
+# it under the terms of the GNU General Public License as published by  
+# the Free Software Foundation, version 3.
 #
-# The contents of this file are subject to the terms of the
-# Common Development and Distribution License (the "License").
-# You may not use this file except in compliance with the License.
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY; without even the implied warranty of 
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
+# General Public License for more details.
 #
-# You can obtain a copy of the license at src/license_cddl-1.0.txt
-# or http://www.opensolaris.org/os/licensing.
-# See the License for the specific language governing permissions
-# and limitations under the License.
+# You should have received a copy of the GNU General Public License 
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 #
-# When distributing Covered Code, include this CDDL HEADER in each
-# file and include the License file at src/license_cddl-1.0.txt
-# If applicable, add the following below this CDDL HEADER, with the
-# fields enclosed by brackets "[]" replaced with your own identifying
-# information: Portions Copyright [yyyy] [name of copyright owner]
-#
-# CDDL HEADER END
-#/
 
 import sys,os
 import png, math
@@ -130,6 +123,39 @@ def isBlankLine(line):
             return False
     return True
 
+def writeHeader(outfd, fontName, height):
+    print( '/*', file=outfd)
+    print( ' * Font {}'.format(fontName), file=outfd)
+    print( ' */', file=outfd)
+    print( '', file=outfd)
+    print( '#define {}_HEIGHT {}'.format(fontName.upper(),height), file=outfd)
+    print( '', file=outfd)
+
+debug = True
+
+def getMinWidth(ch, pixels,verbose=0):
+    if ch == 'y':
+        verbose = 1
+    minWidth = 0
+    mwidth = 0
+    for line in pixels:
+        if verbose:
+            print('gmw: {}'.format(line))
+        for xind in range(len(line)-2,0,-3):
+            if line[xind] == 255:
+                minWidth = xind+2
+            else:
+                break
+        if verbose:
+            print('gmw: {} -> {}'.format(len(line), minWidth))
+        if minWidth > mwidth:
+            mwidth = minWidth
+
+    if verbose:
+        print('gmw: -> {}'.format(mwidth))
+    return mwidth
+
+
 def generateGlyphHeader(fontName, chars):
     header = True
     outfd = open('{}.h'.format(opts.output), 'w')
@@ -147,13 +173,9 @@ def generateGlyphHeader(fontName, chars):
         if opts.verbose:
             print(meta)
             print('{}: width: {}, height: {}'.format(ch, width,height))
+
         if header:
-            print( '/*', file=outfd)
-            print( ' * Font {}'.format(fontName), file=outfd)
-            print( ' */', file=outfd)
-            print( '', file=outfd)
-            print( '#define {}_HEIGHT {}'.format(fontName.upper(),height), file=outfd)
-            print( '', file=outfd)
+            writeHeader(outfd, fontName, height)
             header = False
 
 
@@ -161,18 +183,19 @@ def generateGlyphHeader(fontName, chars):
         yind = 0
         pind = 'r'
         line = {}
-        while True:
-            try:
-                item = pixels.__next__()
-            except:
-                break
+        pixs = list(pixels)
+        minWidth = getMinWidth(ch, list(pixs))
+        print('{}: width {} minWidth {}'.format(ch, width, minWidth))
+
+        #width, height, pixels, meta = glyph.asDirect()
+        for item in pixs:
             if opts.verbose:
                 print('{}: {}'.format(yind,item))
             if isBlankLine(item):
                 yoff += 1
                 continue
             line[yind] = []
-            for xind in range(0,len(item),3):
+            for xind in range(0,minWidth,3):
                 line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2]))
                 #line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2], a=255-item[xind+3]))
             if opts.verbose:
@@ -288,20 +311,45 @@ def genpng(chars):
 
     font = TTFont(opts.ttf) 
     gs = font.getGlyphSet()
+
+    cm = font['cmap']
+    t = cm.getcmap(3,1).cmap
+    s = font.getGlyphSet()
+    units_per_em = font['head'].unitsPerEm
+    width = s[t[ord('0')]].width
+    # get max width
+    maxWidth = 0
+    for ch in chars:
+        glyphName =  getGlyphName(ch)
+        width = s[t[ord(ch)]].width
+        if opts.verbose:
+            print(ch)
+            print('{}: Width in points: {}'.format(glyphName, width))
+        if width > maxWidth:
+            maxWidth = width
+            maxCh = ch
+            maxGlyphName = glyphName
+
+    maxCm = maxWidth*2.54/72
+    print('{}: max Width in points: {}'.format(maxGlyphName, maxWidth))
+    print('Width in inches: %f' % (maxWidth/72))
+    print('Width in cm: %f' % (maxCm))
+    gscale = 0.8 / maxCm
+    print('gscale {}'.format(gscale))
+    print('scaled max Width in points: {}'.format(maxGlyphName, maxWidth*gscale))
+    print('scaled Width in inches: %f' % (maxWidth/72*gscale))
+    print('scaled Width in cm: %f' % (maxCm*gscale))
+
     ref = gs['zero']
     baseWidth = ref.width
     for ch in chars:
-        if ch in cmap:
-            glyphName = cmap[ch]
-        else:
-            glyphName = ch
+        glyphName =  getGlyphName(ch)
         pen = ReportLabPen(gs, Path(fillColor=colors.black, strokeWidth=1))
         g = gs[glyphName]
         g.draw(pen)
         if opts.verbose:
             print('{}: width: {}, height: {}'.format( ch, g.width, g.height))
 
-        #w, h = g.width, 21
         w = int((g.width / float(ref.width)) * 30.9)
         h = 28 
         if opts.verbose:
