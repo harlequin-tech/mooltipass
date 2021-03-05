@@ -134,8 +134,6 @@ def writeHeader(outfd, fontName, height):
 debug = True
 
 def getMinWidth(ch, pixels,verbose=0):
-    if ch == 'y':
-        verbose = 1
     minWidth = 0
     mwidth = 0
     for line in pixels:
@@ -185,7 +183,8 @@ def generateGlyphHeader(fontName, chars):
         line = {}
         pixs = list(pixels)
         minWidth = getMinWidth(ch, list(pixs))
-        print('{}: width {} minWidth {}'.format(ch, width, minWidth))
+        if opts.verbose:
+            print('{}: width {} minWidth {}'.format(ch, width, minWidth))
 
         #width, height, pixels, meta = glyph.asDirect()
         for item in pixs:
@@ -334,7 +333,7 @@ def genpng(chars):
     print('{}: max Width in points: {}'.format(maxGlyphName, maxWidth))
     print('Width in inches: %f' % (maxWidth/72))
     print('Width in cm: %f' % (maxCm))
-    gscale = 0.8 / maxCm
+    gscale = 0.5 / maxCm
     print('gscale {}'.format(gscale))
     print('scaled max Width in points: {}'.format(maxGlyphName, maxWidth*gscale))
     print('scaled Width in inches: %f' % (maxWidth/72*gscale))
