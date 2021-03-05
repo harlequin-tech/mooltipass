@@ -29,26 +29,21 @@ from reportlab.graphics.shapes import Path
 from fontTools.ttLib import TTFont
 from reportlab.lib import colors
 
-
-
-
 parser = OptionParser(usage = 'usage: %prog [opts]')
-parser.add_option('-f', '--font', help='font file', dest='font', default=None)
-parser.add_option('-n', '--name', help='name for font', dest='name', default=None)
 parser.add_option('-t', '--ttf', help='ttf font file name', dest='ttf', default=None)
-parser.add_option('-p', '--png', help='png file for font', dest='png', default=None)
-parser.add_option('-x', '--xml', help='xml file for font', dest='xml', default=None)
-parser.add_option('-o', '--output', help='name of output file', dest='output', default='font')
+parser.add_option('-n', '--name', help='name for font', dest='name', default=None)
+parser.add_option('-o', '--output', help='name of output file', dest='output', default=None)
 parser.add_option('-d', '--depth', help='bits per pixel (default: 2)', type='int', dest='depth', default=2)
 parser.add_option('-l', '--list', help='list glyphs', action='store_true', dest='list', default=False)
 parser.add_option('', '--debug', help='enable debug output', action='store_true', dest='debug', default=False)
 parser.add_option('', '--verbose', help='enable verbose output', action='store_true', dest='verbose', default=False)
 (opts, args) = parser.parse_args()
 
-CHAR_EURO = 0x20ac      # Euro currency sign, not yet supported
+if opts.ttf is None:
+    parser.error('ttf opt is required')
 
-#if opts.ttf is None or (opts.name == None or opts.png == None or opts.xml == None):
-#    parser.error('name, png, and xml opts are required')
+if opts.output is None:
+    opts.output = os.path.basename(opts.ttf)[:-4]
 
 extendedChars = {
     0xB0: 'Degree Sign',
@@ -156,6 +151,7 @@ def getMinWidth(ch, pixels,verbose=0):
 
 def generateGlyphHeader(fontName, chars):
     header = True
+    print("Writing {} glyphs to {}.h".format(len(chars),opts.output))
     outfd = open('{}.h'.format(opts.output), 'w')
     print('#ifndef {}_H_'.format(fontName.upper()), file=outfd)
     print('#define {}_H_'.format(fontName.upper()), file=outfd)
@@ -330,14 +326,15 @@ def genpng(chars):
             maxGlyphName = glyphName
 
     maxCm = maxWidth*2.54/72
-    print('{}: max Width in points: {}'.format(maxGlyphName, maxWidth))
-    print('Width in inches: %f' % (maxWidth/72))
-    print('Width in cm: %f' % (maxCm))
     gscale = 0.5 / maxCm
-    print('gscale {}'.format(gscale))
-    print('scaled max Width in points: {}'.format(maxGlyphName, maxWidth*gscale))
-    print('scaled Width in inches: %f' % (maxWidth/72*gscale))
-    print('scaled Width in cm: %f' % (maxCm*gscale))
+    if opts.verbose:
+        print('{}: max Width in points: {}'.format(maxGlyphName, maxWidth))
+        print('Width in inches: %f' % (maxWidth/72))
+        print('Width in cm: %f' % (maxCm))
+        print('gscale {}'.format(gscale))
+        print('scaled max Width in points: {}'.format(maxGlyphName, maxWidth*gscale))
+        print('scaled Width in inches: %f' % (maxWidth/72*gscale))
+        print('scaled Width in cm: %f' % (maxCm*gscale))
 
     ref = gs['zero']
     baseWidth = ref.width
