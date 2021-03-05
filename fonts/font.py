@@ -34,6 +34,7 @@ parser.add_option('-t', '--ttf', help='ttf font file name', dest='ttf', default=
 parser.add_option('-n', '--name', help='name for font', dest='name', default=None)
 parser.add_option('-o', '--output', help='name of output file', dest='output', default=None)
 parser.add_option('-d', '--depth', help='bits per pixel (default: 2)', type='int', dest='depth', default=2)
+parser.add_option('-s', '--scale', help='scale font by this (default: 1.0)', type='float', dest='scale', default=1.0)
 parser.add_option('-l', '--list', help='list glyphs', action='store_true', dest='list', default=False)
 parser.add_option('', '--debug', help='enable debug output', action='store_true', dest='debug', default=False)
 parser.add_option('', '--verbose', help='enable verbose output', action='store_true', dest='verbose', default=False)
@@ -326,7 +327,7 @@ def genpng(chars):
             maxGlyphName = glyphName
 
     maxCm = maxWidth*2.54/72
-    gscale = 0.5 / maxCm
+    gscale = (0.5 / maxCm) * opts.scale
     if opts.verbose:
         print('{}: max Width in points: {}'.format(maxGlyphName, maxWidth))
         print('Width in inches: %f' % (maxWidth/72))
@@ -346,11 +347,11 @@ def genpng(chars):
         if opts.verbose:
             print('{}: width: {}, height: {}'.format( ch, g.width, g.height))
 
-        w = int((g.width / float(ref.width)) * 30.9)
-        h = 28 
+        w = int((g.width / float(ref.width)) * 30.9) * opts.scale
+        h = 28 * opts.scale
         if opts.verbose:
             print('{}: width: {}, height: {}, w: {}, h: {}'.format( ch, g.width, g.height, w, h))
-        gscale = float(31.0 / float(g.width)) * 0.45
+        #gscale = float(31.0 / float(g.width)) * 0.45
         from reportlab.graphics import renderPM
         from reportlab.graphics.shapes import Group, Drawing, scale
 
