@@ -146,15 +146,66 @@ def getMinWidth(ch, pixels,verbose=0):
         print('gmw: -> {}'.format(mwidth))
     return mwidth
 
+def getGlyphMap(fontName, chars, glyphData, glyphd):
+    # map
+    index = 0
+    chMap = []
+    glyphHeader = {}
+    glyphOffset = 0
+    glyphHeaderStr = ''
+    for ch in range(ord(' '), 255):
+        glyphName = getGlyphName(chr(ch))
+        if chr(ch) in chars and glyphName in glyphData:
+            chMap.append(index)
+            index += 1
+            glyph = glyphd[glyphName]
+            rect = [0,0,glyph['height'],glyph['width']]
+            offset = [0,glyph['yoff']]
+            if ch == ord(' '):
+                glyphHeaderStr += "    {{ {:>2}, {:>2}, {:>2}, {:>2}, {:>2}, -1 }}, /* '{}' */\n".format(glyph['width'], 
+                    rect[2], rect[3], offset[0], offset[1], glyph['code'])
+                glyphHeader[ch] = pack('=BBBbbH', int(glyph['width']), rect[2], rect[3], offset[0], offset[1], 0xFFFF)
+            else:
+                if ch > 127:
+                    if extendedChars.has_key(ch):
+                        char = extendedChars[ch]
+                    else:
+                        char = '~'
+                else:
+                    char = chr(ch)
+                glyphHeaderStr += "    {{ {:>2}, {:>2}, {:>2}, {:>2}, {:>2}, {}_{:#x} }}, /* '{}' */\n".format(glyph['width'], 
+                    rect[2], rect[3], offset[0], offset[1], fontName, ch, char)
+                glyphHeader[ch] = pack('=BBBbbH', int(glyph['width']), rect[2], rect[3], offset[0], offset[1], glyphOffset)
+                glyphOffset += len(glyphData[glyphName])
+        else:
+            chMap.append(None)
 
-def generateGlyphHeader(fontName, chars):
-    header = True
-    print("Writing {} glyphs to {}.h".format(len(chars),opts.output))
-    outfd = open('{}.h'.format(opts.output), 'w')
-    print('#ifndef {}_H_'.format(fontName.upper()), file=outfd)
-    print('#define {}_H_'.format(fontName.upper()), file=outfd)
+    return glyphHeaderStr,chMap
+
+def writeAsciiMap(outfd, fontName, chMap):
+    print( '\n/* Mapping from ASCII codes to font characters, from space (0x20) to del (0x7f) */', file=outfd)
+    print( 'const uint8_t {}_asciimap[{}] __attribute__((__progmem__)) = {{ '.format(fontName,len(chMap)), end='', file=outfd)
+    glyphMap = []
+    index = 0
+    for item in chMap:
+        if index == 0:
+            print('\n    ', end='', file=outfd)
+            index = 16
+        if item != None:
+            glyphMap.append(item)
+            print( '{:>3}, '.format(item), end='', file=outfd)
+        else:
+            glyphMap.append(255)
+            print( '255, ', end='', file=outfd)
+        index -= 1
+    print('\n};', file=outfd)
+    return glyphMap
+
+
+def writeGlyphs(outfd, fontName, chars):
     glyphd = {}
     glyphData = {}
+    header = True
     for ch in chars:
         glyphName = getGlyphName(ch)
         pngFilename = 'output/{}.png'.format(glyphName)
@@ -162,14 +213,14 @@ def generateGlyphHeader(fontName, chars):
         width, height, pixels, meta = glyph.asDirect()
         glyphd[glyphName] = dict(width=width, height=height, meta=meta)
         maxWidth = width
-        if opts.verbose:
+        if opts.verbose > 2:
             print(meta)
+        if opts.verbose > 1:
             print('{}: width: {}, height: {}'.format(ch, width,height))
 
         if header:
             writeHeader(outfd, fontName, height)
             header = False
-
 
         yoff = 0
         yind = 0
@@ -177,12 +228,12 @@ def generateGlyphHeader(fontName, chars):
         line = {}
         pixs = list(pixels)
         minWidth = getMinWidth(ch, list(pixs))
-        if opts.verbose:
+        if opts.verbose > 1:
             print('{}: width {} minWidth {}'.format(ch, width, minWidth))
 
         #width, height, pixels, meta = glyph.asDirect()
         for item in pixs:
-            if opts.verbose:
+            if opts.verbose > 2:
                 print('{}: {}'.format(yind,item))
             if isBlankLine(item):
                 yoff += 1
@@ -191,7 +242,7 @@ def generateGlyphHeader(fontName, chars):
             for xind in range(0,minWidth,3):
                 line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2]))
                 #line[yind].append(dict(r=item[xind+0], g=item[xind+1], b=item[xind+2], a=255-item[xind+3]))
-            if opts.verbose:
+            if opts.verbose > 2:
                 print('{}: {}'.format(yind,line[yind]))
             yind += 1
 
@@ -236,60 +287,21 @@ def generateGlyphHeader(fontName, chars):
         print('};\n', file=outfd)
         print('', file=outfd)
 
-    # map
-    index = 0
-    chMap = []
-    glyphHeader = {}
-    glyphOffset = 0
-    glyphHeaderStr = ''
-    for ch in range(ord(' '), 255):
-        glyphName = getGlyphName(chr(ch))
-        if chr(ch) in chars and glyphName in glyphData:
-            chMap.append(index)
-            index += 1
-            glyph = glyphd[glyphName]
-            rect = [0,0,glyph['height'],glyph['width']]
-            offset = [0,glyph['yoff']]
-            if ch == ord(' '):
-                glyphHeaderStr += "    {{ {:>2}, {:>2}, {:>2}, {:>2}, {:>2}, -1 }}, /* '{}' */\n".format(glyph['width'], 
-                    rect[2], rect[3], offset[0], offset[1], glyph['code'])
-                glyphHeader[ch] = pack('=BBBbbH', int(glyph['width']), rect[2], rect[3], offset[0], offset[1], 0xFFFF)
-            else:
-                if ch > 127:
-                    if extendedChars.has_key(ch):
-                        char = extendedChars[ch]
-                    else:
-                        char = '~'
-                else:
-                    char = chr(ch)
-                glyphHeaderStr += "    {{ {:>2}, {:>2}, {:>2}, {:>2}, {:>2}, {}_{:#x} }}, /* '{}' */\n".format(glyph['width'], 
-                    rect[2], rect[3], offset[0], offset[1], fontName, ch, char)
-                glyphHeader[ch] = pack('=BBBbbH', int(glyph['width']), rect[2], rect[3], offset[0], offset[1], glyphOffset)
-                glyphOffset += len(glyphData[glyphName])
-        else:
-            chMap.append(None)
+    return count, glyphd, glyphData
 
-    glyphMap = []
+def generateGlyphHeader(fontName, chars):
+    print("Writing {} glyphs to {}.h".format(len(chars),opts.output))
 
-    print( '\n/* Mapping from ASCII codes to font characters, from space (0x20) to del (0x7f) */', file=outfd)
-    print( 'const uint8_t {}_asciimap[{}] __attribute__((__progmem__)) = {{ '.format(fontName,len(chMap)), end='', file=outfd)
-    index = 0
-    for item in chMap:
-        if index == 0:
-            print('\n    ', end='', file=outfd)
-            index = 16
-        if item != None:
-            glyphMap.append(item)
-            print( '{:>3}, '.format(item), end='', file=outfd)
-        else:
-            glyphMap.append(255)
-            print( '255, ', end='', file=outfd)
-        index -= 1
-    print('\n};', file=outfd)
+    outfd = open('{}.h'.format(opts.output), 'w')
+    print('#ifndef {}_H_'.format(fontName.upper()), file=outfd)
+    print('#define {}_H_'.format(fontName.upper()), file=outfd)
+
+    count, glyphd, glyphData = writeGlyphs(outfd, fontName, chars)
+    glyphHeaderStr,chMap = getGlyphMap(fontName, chars, glyphData, glyphd)
+    glyphMap = writeAsciiMap(outfd, fontName, chMap)
 
     if len(chMap) < 256:
         glyphMap.extend([255 for i in range(0, 256-len(chMap))])
-
 
     # glyph_t
     print('\nconst glyph_t {}[] __attribute__((__progmem__)) = {{'.format(fontName), file=outfd)
@@ -315,7 +327,7 @@ def genpng(chars):
     for ch in chars:
         glyphName =  getGlyphName(ch)
         width = s[t[ord(ch)]].width
-        if opts.verbose:
+        if opts.verbose > 1:
             print(ch)
             print('{}: Width in points: {}'.format(glyphName, width))
         if width > maxWidth:
@@ -341,12 +353,12 @@ def genpng(chars):
         pen = ReportLabPen(gs, Path(fillColor=colors.black, strokeWidth=1))
         g = gs[glyphName]
         g.draw(pen)
-        if opts.verbose:
+        if opts.verbose > 1:
             print('{}: width: {}, height: {}'.format( ch, g.width, g.height))
 
         w = int((g.width / float(ref.width)) * 30.9) * opts.scale
         h = 28 * opts.scale
-        if opts.verbose:
+        if opts.verbose > 1:
             print('{}: width: {}, height: {}, w: {}, h: {}'.format( ch, g.width, g.height, w, h))
         #gscale = float(31.0 / float(g.width)) * 0.45
         from reportlab.graphics import renderPM
