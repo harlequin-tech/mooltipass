@@ -408,8 +408,7 @@ def genpng(chars):
         renderPM.drawToFile(d, imageFile, fmt="PNG")
 
 def main():
-    #chars = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ%$'
-    chars = 'abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
     if opts.ttf:
         genpng(chars)
         if opts.name is None:
