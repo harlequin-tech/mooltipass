@@ -127,6 +127,10 @@ def writeHeader(outfd, fontName, height):
     print( '', file=outfd)
 
 def getMinWidth(ch, pixels,verbose=0):
+    ''' determine the minimum width for the specified glyph and 
+        pixel array. This is the smallest width that accomodates
+        all of the set pixel data.
+    '''
     minWidth = 0
     mwidth = 0
     for line in pixels:
@@ -147,6 +151,9 @@ def getMinWidth(ch, pixels,verbose=0):
     return mwidth
 
 def getGlyphMap(fontName, chars, glyphData, glyphd):
+    ''' Generate glyph_t header string with
+        width, height, xoff, yoff data for each glyph
+    '''
     # map
     index = 0
     chMap = []
@@ -183,6 +190,10 @@ def getGlyphMap(fontName, chars, glyphData, glyphd):
     return glyphHeaderStr,chMap
 
 def writeAsciiMap(outfd, fontName, chMap):
+    ''' write an array mapping ASCII codes to glyphs. 
+        Unmapped codes are set to 255.
+        Table starts from space (0x20)
+    '''
     print( '\n/* Mapping from ASCII codes to font characters, from space (0x20) to del (0x7f) */', file=outfd)
     print( 'const uint8_t {}_asciimap[{}] __attribute__((__progmem__)) = {{ '.format(fontName,len(chMap)), end='', file=outfd)
     glyphMap = []
@@ -202,6 +213,10 @@ def writeAsciiMap(outfd, fontName, chMap):
     return glyphMap
 
 def parsePNG(pngFilename, ch, glyphName, glyphd):
+    ''' parse the png file for the specified ch glyph.
+        returns raster lines of the glyph, width and height
+        and yoffset for start of lines
+    '''
     glyph = png.Reader(pngFilename)
     width, height, pixels, meta = glyph.asDirect()
     glyphd[glyphName] = dict(width=width, height=height, meta=meta)
@@ -238,6 +253,15 @@ def parsePNG(pngFilename, ch, glyphName, glyphd):
 
 
 def writeGlyphs(outfd, fontName, chars):
+    ''' write pixel data for each glyph in the chars string
+        pixel data is read from the png for each char
+    '''
+
+    asciiPixel = [' ', '.', '*', '*',
+                  '*', '*', '*', '*',
+                  '*', '*', '*', '*',
+                  '*', '*', '*', '*']
+
     glyphd = {}
     glyphData = {}
     header = True
@@ -250,11 +274,6 @@ def writeGlyphs(outfd, fontName, chars):
         if header:
             writeHeader(outfd, fontName, height)
             header = False
-
-        asciiPixel = [' ', '.', '*', '*',
-                      '*', '*', '*', '*',
-                      '*', '*', '*', '*',
-                      '*', '*', '*', '*']
 
         count = 0
         glyphData[glyphName] = []
@@ -296,6 +315,12 @@ def writeGlyphs(outfd, fontName, chars):
     return count, glyphd, glyphData
 
 def generateGlyphHeader(fontName, chars):
+    ''' Creates the font header file with:
+        - glyph pixel arrays
+        - ASCII map for glyphs
+        - glyph_t array with entry per glyph
+    '''
+
     print("Writing {} glyphs to {}.h".format(len(chars),opts.output))
 
     outfd = open('{}.h'.format(opts.output), 'w')
