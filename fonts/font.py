@@ -45,6 +45,9 @@ if opts.ttf is None:
 if opts.output is None:
     opts.output = os.path.basename(opts.ttf)[:-4]
 
+if opts.name is None:
+    opts.name = os.path.basename(opts.ttf)[:-4]
+
 extendedChars = {
     0xB0: 'Degree Sign',
     0xE0: '`a - Latin Small Letter A with Grave',
@@ -416,8 +419,6 @@ def main():
                 print( '0x{:x}: {:17} -> {}'.format(glyphs[name].originalgid, name, filename))
             return
         genpng(chars)
-        if opts.name is None:
-            opts.name = os.path.basename(opts.ttf)[:-4]
         generateGlyphHeader(opts.name, chars)
     else:
         # old method using single png and xml to define glyph rasters
