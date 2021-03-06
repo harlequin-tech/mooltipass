@@ -410,31 +410,18 @@ def genpng(chars):
 def main():
     chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
     if opts.ttf:
-        genpng(chars)
-        if opts.name is None:
-            opts.name = os.path.basename(opts.ttf)[:-4]
-        generateGlyphHeader(opts.name, chars)
-        return
         if opts.list:
             for name in glyphs:
                 filename = 'output/' + name + ".png"
                 print( '0x{:x}: {:17} -> {}'.format(glyphs[name].originalgid, name, filename))
             return
-        for name in chars:
-            if name in cmap:
-                ind = cmap[name]
-            else:
-                ind = name
-            if ind in glyphs:
-                filename = 'output/' + ind + ".png"
-                print( '0x{:x}: {:17} -> {}'.format(glyphs[ind].originalgid, name, filename))
-                #glyphs[ind].export(filename, 20, 6)
-                #glyphs[ind].export(filename, 20, 6)
-                generateGlyphHeader('test', name, filename)
-                return
-        return
-
-    generateHeader(opts.name, opts.png, opts.xml)
+        genpng(chars)
+        if opts.name is None:
+            opts.name = os.path.basename(opts.ttf)[:-4]
+        generateGlyphHeader(opts.name, chars)
+    else:
+        # old method using single png and xml to define glyph rasters
+        generateHeader(opts.name, opts.png, opts.xml)
 
 if __name__ == "__main__":
     main()
